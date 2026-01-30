@@ -18,12 +18,12 @@ jobs:
 
     strategy:
       matrix:
-        reference: [v3, v4]
-        suffix: ["", "-thunder"]
+        reference: [v3, v4, v5]
+        suffix: [""]
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Establish the committer identity
         continue-on-error: false
