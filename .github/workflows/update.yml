@@ -3,12 +3,15 @@ name: Update the repository
 on:
   push:
     branches:
-      - cirruslabs
+      - main
   schedule:
     - cron: '0 0 * * *'
 
 permissions:
   contents: write
+
+env:
+  WARPBUILD_CACHE_REF: v1.4.11
 
 jobs:
   update:
@@ -18,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        reference: [v3, v4, v5]
+        reference: [v5]
         suffix: [""]
 
     steps:
@@ -28,14 +31,16 @@ jobs:
       - name: Establish the committer identity
         continue-on-error: false
         run: |
-          git config --global user.name "Cirrus Labs"
-          git config --global user.email "support@cirruslabs.org"
+          git config --global user.name "Cache Wrapper"
+          git config --global user.email "actions@users.noreply.github.com"
 
       - name: Add "actions/cache" as a Git remote and fetch it
         continue-on-error: false
         run: |
           git remote add upstream https://github.com/actions/cache.git
           git fetch upstream --tags --force
+          git remote add warpbuilds https://github.com/WarpBuilds/cache.git
+          git fetch warpbuilds "refs/tags/${WARPBUILD_CACHE_REF}:refs/remotes/warpbuilds/cache" --force
 
       - name: Checkout to a new branch ${{ matrix.reference }}${{ matrix.suffix }} that is pointing to ${{ matrix.reference }}
         continue-on-error: false
@@ -47,19 +52,23 @@ jobs:
         run: |
           rm -rf .github/workflows
 
-      - name: Apply Cirrus Labs modifications
+      - name: Apply cache wrapper modifications
         continue-on-error: false
         run: |
-          git show cirruslabs:trampoline${{ matrix.suffix }}.mjs > dist/restore/trampoline.mjs
-          git show cirruslabs:trampoline${{ matrix.suffix }}.mjs > dist/restore-only/trampoline.mjs
-          git show cirruslabs:trampoline${{ matrix.suffix }}.mjs > dist/save/trampoline.mjs
-          git show cirruslabs:trampoline${{ matrix.suffix }}.mjs > dist/save-only/trampoline.mjs
+          git show ${{ github.sha }}:trampoline${{ matrix.suffix }}.mjs > dist/restore/trampoline.mjs
+          git show ${{ github.sha }}:trampoline${{ matrix.suffix }}.mjs > dist/restore-only/trampoline.mjs
+          git show ${{ github.sha }}:trampoline${{ matrix.suffix }}.mjs > dist/save/trampoline.mjs
+          git show ${{ github.sha }}:trampoline${{ matrix.suffix }}.mjs > dist/save-only/trampoline.mjs
+          git show refs/remotes/warpbuilds/cache:dist/restore/index.js > dist/restore/warp-index.js
+          git show refs/remotes/warpbuilds/cache:dist/restore-only/index.js > dist/restore-only/warp-index.js
+          git show refs/remotes/warpbuilds/cache:dist/save/index.js > dist/save/warp-index.js
+          git show refs/remotes/warpbuilds/cache:dist/save-only/index.js > dist/save-only/warp-index.js
           sed -i 's/index.js/trampoline.mjs/' action.yml restore/action.yml save/action.yml
 
       - name: Commit and push the changes
         continue-on-error: false
         run: |
-          git add . && git commit -m "Cirrus Labs modifications"
+          git add . && git commit -m "Cache wrapper modifications"
 
       - name: Force-push to the "${{ matrix.reference }}${{ matrix.suffix }}" branch
         run: git push -f origin refs/heads/${{ matrix.reference }}${{ matrix.suffix }}

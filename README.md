@@ -1,63 +1,41 @@
-# Cirrus Cache action
+# Cache action
 
-This utility repository periodically runs a GitHub Action that pulls the latest [actions/cache](https://github.com/actions/cache) repository and applies a rather simple patch to all of its actions:
+This utility repository periodically pulls the latest
+[actions/cache](https://github.com/actions/cache) release branches and wraps
+their action entrypoints.
+
+On WarpBuild runners, the wrapper detects `WARPBUILD_RUNNER_VERIFICATION_TOKEN`
+and loads WarpBuild's cache implementation. Everywhere else, it leaves the
+environment untouched and falls back to the standard GitHub Actions cache.
 
 ```ts
-const omniCacheAddress = process.env["OMNI_CACHE_ADDRESS"];
-const httpCacheHost = process.env["CIRRUS_HTTP_CACHE_HOST"];
-const cacheAddress = omniCacheAddress ?? httpCacheHost;
-
-if (cacheAddress != null) {
-    const newActionsCacheURL = `http://${cacheAddress}/`;
-
-    console.log(
-        `Redefining the ACTIONS_CACHE_URL to ${newActionsCacheURL} to make the cache faster...`
-    );
-
-    process.env["ACTIONS_CACHE_URL"] = newActionsCacheURL;
-    process.env["ACTIONS_RESULTS_URL"] = newActionsCacheURL;
+if (process.env["WARPBUILD_RUNNER_VERIFICATION_TOKEN"]) {
+    await import("./warp-index.js");
+    return;
 }
+
+await import("./index.js");
 ```
 
-This allows jobs on [Cirrus Runners](https://cirrus-runners.app/) or self-hosted runners to use a faster cache backend.
+This lets workflows use one cache action without provider-specific `if:`
+conditions.
 
-## Cirrus Runners integration
-
-Cirrus Runners run an omni-cache sidecar instance by default, making the changes in your CI workflows as simple as:
+## Usage
 
 ```diff
 -- uses: actions/cache@v5
-+- uses: cirruslabs/cache@v5
++- uses: willcl-ark/cache@v5
    with:
      path: node_modules
      key: node_modules
 ```
 
-## Self-hosted runners integration
+The same replacement works for the split restore and save actions:
 
-If running outside of Cirrus Runners, simply use `setup-omni-cache` action to start an omni-cache sidecar before caching:
+```diff
+-- uses: actions/cache/restore@v5
++- uses: willcl-ark/cache/restore@v5
 
-```yaml
-steps:
-  - name: Setup omni-cache
-    uses: cirruslabs/setup-omni-cache@main
-    with:
-      bucket: ci-omni-cache
-      s3-endpoint: ${{ secrets.S3_ENDPOINT }} # can be R2 or any other S3-compatible storage
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: us-east-1
-  - name: Cache node modules
-    uses: cirruslabs/cache@v5
-    with:
-      path: node_modules
-      key: node_modules
+-- uses: actions/cache/save@v5
++- uses: willcl-ark/cache/save@v5
 ```
-
-## Why?
-
-Because the following PRs were closed/not merged yet:
-
-* https://github.com/actions/cache/pull/679
-* https://github.com/actions/toolkit/pull/1695

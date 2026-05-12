@@ -1,21 +1,25 @@
-async function tryOverrideCache() {
-    // Try Cirrus Runners region-local cache servers
-    const omniCacheAddress = process.env["OMNI_CACHE_ADDRESS"];
-    const httpCacheHost = process.env["CIRRUS_HTTP_CACHE_HOST"];
-    const cacheAddress = omniCacheAddress ?? httpCacheHost;
+import { access } from "node:fs/promises";
 
-    if (cacheAddress) {
-        const httpCacheURL = "http://" + cacheAddress + "/";
-
-        console.log("Redefining the ACTIONS_CACHE_URL and ACTIONS_RESULTS_URL to " + httpCacheURL + " to make the cache faster...");
-
-        process.env["ACTIONS_CACHE_URL"] = httpCacheURL;
-        process.env["ACTIONS_RESULTS_URL"] = httpCacheURL;
+async function hasWarpCache() {
+    try {
+        await access(new URL("./warp-index.js", import.meta.url));
+        return true;
+    } catch {
+        return false;
     }
-
-    // Do not change anything, thus falling back to GitHub-provided cache servers
 }
 
-await tryOverrideCache();
+async function tryOverrideCache() {
+    if (process.env["WARPBUILD_RUNNER_VERIFICATION_TOKEN"] && await hasWarpCache()) {
+        console.log("Using WarpBuild cache service...");
+        await import("./warp-index.js");
+        return true;
+    }
 
-import("./index.js")
+    // Do not change anything, thus falling back to GitHub-provided cache servers.
+    return false;
+}
+
+if (!await tryOverrideCache()) {
+    import("./index.js")
+}
